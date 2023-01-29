@@ -55205,7 +55205,11 @@ class YamlToAws {
         const flatSettings = this.flattenObject(settings, true)
         this.logger.info(`Parameters to be set ${Object.keys(flatSettings).length} keys`)
 
+        const PAUSE_COUNT = 20 // set the number of requests after which to pause
+        const PAUSE_TIME_MS = 1500 // set the duration of the pause in milliseconds
+
         // loop through the flattened object and save each key/value pair to ssm
+        let requestCount = 0
         for (const k in flatSettings) {
             const key = prefix + k.split("']['").join("/").replace("['", "").replace("']", "")
             const value = flatSettings[k]
@@ -55214,6 +55218,11 @@ class YamlToAws {
                 this.logger.info(`Saved SSM parameter ${key}`)
             } catch (err) {
                 this.logger.error(`Failed to save SSM parameter ${key}: ${err}`)
+            }
+
+            requestCount++
+            if (requestCount % PAUSE_COUNT === 0) {
+                await new Promise((resolve) => setTimeout(resolve, PAUSE_TIME_MS))
             }
         }
     }
