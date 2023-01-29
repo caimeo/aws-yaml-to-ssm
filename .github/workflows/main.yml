@@ -1,0 +1,53 @@
+# @format
+name: Test SSM Push Action
+on:
+    push:
+        branches:
+            - main
+    workflow_dispatch:
+        inputs:
+            prefix:
+                required: false
+                description: The prefix for the SSM Parameter Store
+                type: string
+            path:
+                required: false
+                description: The path to the YAML file or directory
+                type: string
+                default: ./testData
+            aws_access_key_id:
+                required: false
+                description: The AWS Access Key ID
+                type: string
+            aws_secret_access_key:
+                required: false
+                description: The AWS Secret Access Key
+                type: string
+            aws_region:
+                required: false
+                description: The AWS Region
+                type: string
+            aws_account_id:
+                required: false
+                description: The AWS Account ID
+                type: string
+jobs:
+    hello_world_job:
+        runs-on: ubuntu-latest
+        name: A test step
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v3
+            - name: Test step
+              id: test
+              uses: ./
+              with:
+                  prefix: ${{ inputs.prefix || 'ctest/test' }}
+                  path: ${{ inputs.path || './testData' }}
+                  aws_access_key_id: ${{ inputs.aws_access_key_id || secrets.AWS_ACCESS_KEY_ID }}
+                  aws_secret_access_key: ${{ inputs.aws_secret_access_key || secrets.AWS_SECRET_ACCESS_KEY }}
+                  aws_region: ${{ inputs.aws_region || vars.AWS_REGION }}
+                  aws_account_id: ${{ inputs.aws_account_id || vars.AWS_ACCOUNT_ID }}
+            # Use the output from the test step
+            - name: Get the output time
+              run: echo "The time was ${{ steps.test.outputs.time }}"

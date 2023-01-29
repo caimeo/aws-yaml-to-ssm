@@ -1,0 +1,8 @@
+# @format
+
+key1a: testVal1a
+key1b: 42
+array1:
+    - testVal1c
+    - testVal1d
+    - testVal1e

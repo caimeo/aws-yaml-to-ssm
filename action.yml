@@ -1,0 +1,29 @@
+# @format
+
+name: "Upload Yaml to SSM Parameter Store"
+description: "Upload to SSM Parameter Store from YAML file or directory"
+inputs:
+    aws_access_key_id:
+        description: "AWS Access Key ID"
+        required: true
+    aws_secret_access_key:
+        description: "AWS Secret Access Key"
+        required: true
+    aws_region:
+        description: "AWS Region"
+        required: true
+    aws_account_id:
+        description: "AWS Account"
+        required: true
+    prefix:
+        description: "Prefix for SSM Parameter Store"
+        required: true
+    path:
+        description: "Path to Directory or YAML file"
+        required: true
+outputs:
+    time: # output will be available to future steps
+        description: "The current time after completion"
+runs:
+    using: "node16"
+    main: "dist/index.js"
