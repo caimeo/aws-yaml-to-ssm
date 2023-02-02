@@ -113,11 +113,23 @@ class YamlToAws {
         const PAUSE_COUNT = 20 // set the number of requests after which to pause
         const PAUSE_TIME_MS = 1500 // set the duration of the pause in milliseconds
 
+        // fetch the current parameters from ssm under the prefix
+        const currentParameters = await this.getExistingSSMParameters(prefix)
+
         // loop through the flattened object and save each key/value pair to ssm
         let requestCount = 0
         for (const k in flatSettings) {
             const key = prefix + k.split("']['").join("/").replace("['", "").replace("']", "")
             const value = flatSettings[k]
+
+            const compareValue = Array.isArray(value) ? value.join(",") : value + ""
+
+            // Check if the key exists in currentParameters and if the value is different
+            if (currentParameters.has(key) && currentParameters.get(key) === compareValue) {
+                currentParameters.delete(key) // Remove the key from currentParameters
+                continue // Skip saving the parameter.
+            }
+
             try {
                 await this.saveSSMParameter(key, value)
                 this.logger.info(`Saved SSM parameter ${key}`)
@@ -125,6 +137,7 @@ class YamlToAws {
                 this.logger.error(`Failed to save SSM parameter ${key}: ${err}`)
             }
 
+            currentParameters.delete(key) // Remove the key from currentParameters
             requestCount++
             if (requestCount % PAUSE_COUNT === 0) {
                 await new Promise((resolve) => setTimeout(resolve, PAUSE_TIME_MS))
@@ -198,6 +211,35 @@ class YamlToAws {
         } catch (error) {
             this.logger.error(`Failed to get the AWS account ID from the credentials: ${error}`)
             throw new Error(`Failed to get the AWS account ID from the credentials: ${error}`)
+        }
+    }
+
+    /**
+     * gets all the existing ssm parameters that start with the prefix
+     * @param {*} prefix
+     */
+    async getExistingSSMParameters(prefix) {
+        const params = {
+            Path: prefix,
+            Recursive: true,
+            WithDecryption: true,
+        }
+        const parameters = new Map()
+        let nextToken
+        try {
+            do {
+                const response = await this.ssm.getParametersByPath({
+                    ...params,
+                    NextToken: nextToken,
+                })
+                for (const parameter of response.Parameters) {
+                    parameters.set(parameter.Name, parameter.Value)
+                }
+                nextToken = response.NextToken
+            } while (nextToken)
+            return parameters
+        } catch (err) {
+            throw new Error(`Failed to get existing SSM parameters: ${err}`)
         }
     }
 }
