@@ -92,7 +92,7 @@ class YamlToAws {
      * @param {*} path  The path to the yaml file(s)
      * @param {*} prefix The prefix to use for the ssm parameters
      */
-    async loadYamlToSSM(path, prefix) {
+    async loadYamlToSSM(path, prefix, options = { clean: false }) {
         // check the account id vs the one attached to the credentials
         await this.checkAccountID(this.awsAccount)
 
@@ -108,13 +108,15 @@ class YamlToAws {
 
         // flatten the object
         const flatSettings = this.flattenObject(settings, true)
-        this.logger.info(`Parameters to be set ${Object.keys(flatSettings).length} keys`)
+        this.logger.info(`Parameters to load ${Object.keys(flatSettings).length} `)
 
         const PAUSE_COUNT = 20 // set the number of requests after which to pause
         const PAUSE_TIME_MS = 1500 // set the duration of the pause in milliseconds
 
         // fetch the current parameters from ssm under the prefix
         const currentParameters = await this.getExistingSSMParameters(prefix)
+
+        this.logger.info(`Current parameters found ${currentParameters.size} `)
 
         // loop through the flattened object and save each key/value pair to ssm
         let requestCount = 0
@@ -127,12 +129,13 @@ class YamlToAws {
             // Check if the key exists in currentParameters and if the value is different
             if (currentParameters.has(key) && currentParameters.get(key) === compareValue) {
                 currentParameters.delete(key) // Remove the key from currentParameters
+                this.logger.info(`Skipping parameter ${key} as it has not changed`)
                 continue // Skip saving the parameter.
             }
 
             try {
                 await this.saveSSMParameter(key, value)
-                this.logger.info(`Saved SSM parameter ${key}`)
+                this.logger.info(`Saved parameter ${key}`)
             } catch (err) {
                 this.logger.error(`Failed to save SSM parameter ${key}: ${err}`)
             }
@@ -141,6 +144,18 @@ class YamlToAws {
             requestCount++
             if (requestCount % PAUSE_COUNT === 0) {
                 await new Promise((resolve) => setTimeout(resolve, PAUSE_TIME_MS))
+            }
+        }
+
+        if (options.clean) {
+            // Delete any parameters that are no longer in the yaml file
+            const deletedParmeterCount = await this.deleteDeadParameters(currentParameters)
+            this.logger.info(`Deleted ${deletedParmeterCount} parameters`)
+        } else {
+            this.logger.info(`The following, ${currentParameters.size} extra parameters were found in prefix ${prefix}, set clean to true to remove them:`)
+            // list the extra parameters
+            for (const key of currentParameters.keys()) {
+                this.logger.info(` ● ${key}`)
             }
         }
     }
@@ -232,6 +247,10 @@ class YamlToAws {
                     ...params,
                     NextToken: nextToken,
                 })
+
+                this.logger.info(`Found ${response.Parameters.length} parameters under ${prefix}`)
+                this.logger.info(response)
+
                 for (const parameter of response.Parameters) {
                     parameters.set(parameter.Name, parameter.Value)
                 }
@@ -240,6 +259,40 @@ class YamlToAws {
             return parameters
         } catch (err) {
             throw new Error(`Failed to get existing SSM parameters: ${err}`)
+        }
+    }
+
+    /**
+     * deletes parameters that are no longer in the yaml file
+     * @param {*} deadParameters
+     */
+    async deleteDeadParameters(deadParameters) {
+        // if deadParameters is a map or string then convert it to an array
+        if (deadParameters instanceof Map) {
+            deadParameters = Array.from(deadParameters.keys())
+        } else if (typeof deadParameters === "string") {
+            deadParameters = deadParameters.split(",")
+        } else if (!Array.isArray(deadParameters)) {
+            throw new Error(`Invalid parameter type for deadParameters: ${typeof deadParameters}`)
+        }
+
+        try {
+            const params = { Names: deadParameters }
+            const response = await this.ssm.deleteParameters(params)
+            this.logger.info(`Deleted ${response.DeletedParameters.length} parameters`)
+            // list all the paramters that were deleted
+            for (const parameter of response.DeletedParameters) {
+                this.logger.info(`Deleted parameter ${parameter}`)
+            }
+            this.logger.info(`Failed to delete ${response.InvalidParameters.length} parameters`)
+            // list all the paramters that failed to delete
+            for (const parameter of response.InvalidParameters) {
+                this.logger.info(`Failed to delete parameter ${parameter}`)
+            }
+            return response.DeletedParameters.length
+        } catch (error) {
+            this.logger.error(`Failed to delete dead parameters: ${error}`)
+            throw new Error(`Failed to delete dead parameters: ${error}`)
         }
     }
 }

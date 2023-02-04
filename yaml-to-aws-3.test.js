@@ -1,7 +1,7 @@
 /** @format */
 
 const { SSM } = require("@aws-sdk/client-ssm")
-const { STSClient, GetCallerIdentityCommand } = require("@aws-sdk/client-sts")
+const { STSClient } = require("@aws-sdk/client-sts")
 const YamlToAws = require("./yaml-to-aws")
 
 const putParameterSpy = jest.spyOn(SSM.prototype, "putParameter")
@@ -12,14 +12,21 @@ putParameterSpy.mockImplementation((params) => {
     }
 })
 
+const deleteParametersMock = jest.spyOn(SSM.prototype, "deleteParameters")
+deleteParametersMock.mockImplementation(() => ({
+    DeletedParameters: ["param1", "param2"],
+    InvalidParameters: ["param3"],
+}))
+
 const getParametersByPath = jest.spyOn(SSM.prototype, "getParametersByPath")
 
 describe("YamlToAws", () => {
     beforeEach(() => {
         getParametersByPath.mockReset()
+        putParameterSpy.mockReset()
     })
 
-    describe.skip("constructor", () => {
+    describe("constructor", () => {
         it("should create an instance of the class with the provided credentials", () => {
             const awsAccount = "123456789012"
             const secretKeyId = "SECRET_ACCESS_KEY_ID"
@@ -37,7 +44,7 @@ describe("YamlToAws", () => {
         })
     })
 
-    describe.skip("flattenObject", () => {
+    describe("flattenObject", () => {
         it("should flatten an object into a single level", () => {
             const obj = { a: { b: { c: "value" } }, d: "value" }
             const instance = new YamlToAws()
@@ -51,7 +58,7 @@ describe("YamlToAws", () => {
         })
     })
 
-    describe.skip("loadYamlToSSM", () => {
+    describe("loadYamlToSSM", () => {
         it("should flatten the settings object and save it to SSM with a custom prefix", async () => {
             getParametersByPath.mockReturnValueOnce({ Parameters: [] })
 
@@ -100,47 +107,5 @@ describe("YamlToAws", () => {
             expect(putParameterSpy).toHaveBeenCalledWith({ Name: "/myPrefix/level2b/level2b/key2ba", Value: "testVal2ba", Type: "String", Overwrite: true })
             expect(putParameterSpy).toHaveBeenCalledWith({ Name: "/myPrefix/level2b/level2b/key2bb", Value: "5", Type: "String", Overwrite: true })
         })
-    })
-})
-
-describe.skip("checkAccountID", () => {
-    let stsclientSendMock
-    let instance
-
-    beforeEach(() => {
-        instance = new YamlToAws()
-        stsclientSendMock = jest.spyOn(STSClient.prototype, "send")
-    })
-
-    afterEach(() => {
-        instance = null
-        stsclientSendMock.mockRestore()
-    })
-
-    test("returns nothing if account ID matches", async () => {
-        const expectedAccountID = "1234567890"
-        const response = { Account: expectedAccountID }
-        stsclientSendMock.mockResolvedValueOnce(response)
-
-        await expect(instance.checkAccountID(expectedAccountID)).resolves.toBeUndefined()
-        expect(stsclientSendMock).toHaveBeenCalledWith(expect.any(GetCallerIdentityCommand))
-    })
-
-    test("throws an error if account ID does not match", async () => {
-        const expectedAccountID = "1234567890"
-        const response = { Account: "0987654321" }
-        stsclientSendMock.mockResolvedValueOnce(response)
-
-        await expect(instance.checkAccountID(expectedAccountID)).rejects.toThrow(`The AWS account ID in the credentials (${response.Account}) does not match the expected account ID (${expectedAccountID}).`)
-        expect(stsclientSendMock).toHaveBeenCalledWith(expect.any(GetCallerIdentityCommand))
-    })
-
-    test("throws an error if STSClient.send() fails", async () => {
-        const expectedAccountID = "1234567890"
-        const error = new Error("STSClient.send() failed")
-        stsclientSendMock.mockRejectedValueOnce(error)
-
-        await expect(instance.checkAccountID(expectedAccountID)).rejects.toThrow(`Failed to get the AWS account ID from the credentials: ${error}`)
-        expect(stsclientSendMock).toHaveBeenCalledWith(expect.any(GetCallerIdentityCommand))
     })
 })
