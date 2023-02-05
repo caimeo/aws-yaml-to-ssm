@@ -55187,7 +55187,7 @@ class YamlToAws {
      * @param {*} path  The path to the yaml file(s)
      * @param {*} prefix The prefix to use for the ssm parameters
      */
-    async loadYamlToSSM(path, prefix, options = { clean: false }) {
+    async loadYamlToSSM(path, prefix, options = {}) {
         // check the account id vs the one attached to the credentials
         await this.checkAccountID(this.awsAccount)
 
@@ -55213,6 +55213,12 @@ class YamlToAws {
 
         this.logger.info(`Current parameters found ${currentParameters.size} `)
 
+        let skipped = 0
+        let updated = 0
+        let deleted = 0
+        let created = 0
+        const existing = currentParameters.size
+
         // loop through the flattened object and save each key/value pair to ssm
         let requestCount = 0
         for (const k in flatSettings) {
@@ -55222,10 +55228,19 @@ class YamlToAws {
             const compareValue = Array.isArray(value) ? value.join(",") : value + ""
 
             // Check if the key exists in currentParameters and if the value is different
-            if (currentParameters.has(key) && currentParameters.get(key) === compareValue) {
-                currentParameters.delete(key) // Remove the key from currentParameters
-                this.logger.info(`Skipping parameter ${key} as it has not changed`)
-                continue // Skip saving the parameter.
+            if (currentParameters.has(key)) {
+                if (currentParameters.get(key) === compareValue) {
+                    currentParameters.delete(key) // Remove the key from currentParameters
+                    this.logger.info(`Skipping parameter ${key} as it has not changed`)
+                    skipped++
+                    continue // Skip saving the parameter.
+                } else {
+                    this.logger.info(`Updating parameter ${key} as it has changed`)
+                    updated++
+                }
+            } else {
+                this.logger.info(`Creating parameter ${key} as it does not exist`)
+                created++
             }
 
             try {
@@ -55244,14 +55259,23 @@ class YamlToAws {
 
         if (options.clean) {
             // Delete any parameters that are no longer in the yaml file
-            const deletedParmeterCount = await this.deleteDeadParameters(currentParameters)
-            this.logger.info(`Deleted ${deletedParmeterCount} parameters`)
+            deleted = await this.deleteDeadParameters(currentParameters)
+            this.logger.info(`Deleted ${deleted} parameters`)
         } else {
             this.logger.info(`The following, ${currentParameters.size} extra parameters were found in prefix ${prefix}, set clean to true to remove them:`)
             // list the extra parameters
             for (const key of currentParameters.keys()) {
                 this.logger.info(` ● ${key}`)
             }
+        }
+
+        return {
+            parameters: Object.keys(flatSettings).length,
+            existing: existing,
+            updated: updated,
+            unchanged: skipped,
+            deleted: options.clean ? deleted : 0,
+            created: created,
         }
     }
 
@@ -55597,12 +55621,21 @@ async function run() {
         const secretKeyId = core.getInput("aws_access_key_id")
         const secretAccessKey = core.getInput("aws_secret_access_key")
         const region = core.getInput("aws_region")
+        const clean = core.getInput("clean") || false
 
         const y2a = new yamlToAws(awsAccountId, secretKeyId, secretAccessKey, region)
-        y2a.setLogger(core)
-        await y2a.loadYamlToSSM(path, prefix)
 
-        core.info(`YamlToAws: ${path} loaded to SSM with prefix ${prefix}!`)
+        core.info(`YamlToAws: ${path} load to SSM with prefix ${prefix}!`)
+
+        y2a.setLogger(core)
+        const result = await y2a.loadYamlToSSM(path, prefix, { clean: clean })
+
+        core.setOutput("parameters", result.parameters)
+        core.setOutput("existing", result.existing)
+        core.setOutput("created", result.created)
+        core.setOutput("updated", result.updated)
+        core.setOutput("deleted", result.deleted)
+        core.setOutput("unchanged", result.unchanged)
 
         core.setOutput("time", new Date().toTimeString())
     } catch (error) {

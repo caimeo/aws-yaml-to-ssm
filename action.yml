@@ -21,9 +21,25 @@ inputs:
     path:
         description: "Path to Directory or YAML file"
         required: true
+    clean:
+        description: "Optionally removes unknown parameters found in the prefix"
+        required: false
+        default: false
 outputs:
     time: # output will be available to future steps
         description: "The current time after completion"
+    parameters:
+        description: "The number of parameters found in the YAML file or directory"
+    existing:
+        description: "The number of parameters already existing"
+    created:
+        description: "The number of parameters created"
+    updated:
+        description: "The number of parameters updated"
+    deleted:
+        description: "The number of parameters deleted"
+    unchanged:
+        description: "The number of parameters unchanged"
 runs:
     using: "node16"
     main: "dist/index.js"

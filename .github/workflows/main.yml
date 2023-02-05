@@ -31,6 +31,11 @@ on:
                 required: false
                 description: The AWS Account ID
                 type: string
+            clean:
+                required: false
+                description: Clean the SSM Parameter Store
+                type: boolean
+                default: false
 jobs:
     hello_world_job:
         runs-on: ubuntu-latest
@@ -48,6 +53,14 @@ jobs:
                   aws_secret_access_key: ${{ inputs.aws_secret_access_key || secrets.AWS_SECRET_ACCESS_KEY }}
                   aws_region: ${{ inputs.aws_region || vars.AWS_REGION }}
                   aws_account_id: ${{ inputs.aws_account_id || vars.AWS_ACCOUNT_ID }}
+                  clean: true
             # Use the output from the test step
-            - name: Get the output time
-              run: echo "The time was ${{ steps.test.outputs.time }}"
+            - name: Check the outputs
+              run: |
+                  echo "The time was ${{ steps.test.outputs.time }}"
+                  echo "Parameter Count: ${{ steps.test.outputs.parameters }}"
+                  echo "Existing Parameters: ${{ steps.test.outputs.existing }}"
+                  echo "Created Parameters: ${{ steps.test.outputs.created }}"
+                  echo "Updated Parameters: ${{ steps.test.outputs.updated }}"
+                  echo "Deleted Parameters: ${{ steps.test.outputs.deleted }}"
+                  echo "Unchanged Parameters: ${{ steps.test.outputs.unchanged }}"

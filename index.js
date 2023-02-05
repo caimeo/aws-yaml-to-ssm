@@ -13,12 +13,21 @@ async function run() {
         const secretKeyId = core.getInput("aws_access_key_id")
         const secretAccessKey = core.getInput("aws_secret_access_key")
         const region = core.getInput("aws_region")
+        const clean = core.getInput("clean") || false
 
         const y2a = new yamlToAws(awsAccountId, secretKeyId, secretAccessKey, region)
-        y2a.setLogger(core)
-        await y2a.loadYamlToSSM(path, prefix)
 
-        core.info(`YamlToAws: ${path} loaded to SSM with prefix ${prefix}!`)
+        core.info(`YamlToAws: ${path} load to SSM with prefix ${prefix}!`)
+
+        y2a.setLogger(core)
+        const result = await y2a.loadYamlToSSM(path, prefix, { clean: clean })
+
+        core.setOutput("parameters", result.parameters)
+        core.setOutput("existing", result.existing)
+        core.setOutput("created", result.created)
+        core.setOutput("updated", result.updated)
+        core.setOutput("deleted", result.deleted)
+        core.setOutput("unchanged", result.unchanged)
 
         core.setOutput("time", new Date().toTimeString())
     } catch (error) {
