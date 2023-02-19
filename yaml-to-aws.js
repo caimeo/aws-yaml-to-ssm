@@ -300,6 +300,12 @@ class YamlToAws {
             throw new Error(`Invalid parameter type for deadParameters: ${typeof deadParameters}`)
         }
 
+        // if there are no dead parameters then return
+        if (deadParameters.length === 0) {
+            this.logger.info("No dead parameters to delete")
+            return 0
+        }
+
         try {
             const params = { Names: deadParameters }
             const response = await this.ssm.deleteParameters(params)

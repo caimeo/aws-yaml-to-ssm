@@ -81,4 +81,14 @@ describe("deleteDeadParameters", () => {
         expect(deleteParametersMock).toHaveBeenCalledTimes(1)
         expect(deleteParametersMock).toHaveBeenCalledWith({ Names: deadParameters })
     })
+
+    it("should not call the SSM API if there are no dead parameters", async () => {
+        const deadParameters = []
+        const instance = new YamlToAws(awsAccount, secretKeyId, secretAccessKey, region)
+
+        const deletedCount = await instance.deleteDeadParameters(deadParameters)
+
+        expect(deletedCount).toEqual(0)
+        expect(deleteParametersMock).not.toHaveBeenCalled()
+    })
 })
