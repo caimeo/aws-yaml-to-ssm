@@ -25,7 +25,7 @@ inputs:
         description: "Optionally removes unknown parameters found in the prefix"
         required: false
         default: false
-    pause_count:
+    batch_count:
         description: "Number of parameters to upload before pausing"
         required: false
         default: 20
