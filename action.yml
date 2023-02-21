@@ -25,6 +25,18 @@ inputs:
         description: "Optionally removes unknown parameters found in the prefix"
         required: false
         default: false
+    pause_count:
+        description: "Number of parameters to upload before pausing"
+        required: false
+        default: 20
+    pause_time:
+        description: "Number of milliseconds to pause after uploading the number of parameters specified in pause_count"
+        required: false
+        default: 1500
+    max_save_attempts:
+        description: "Number of times to attempt to save a parameter before giving up"
+        required: false
+        default: 5
 outputs:
     time: # output will be available to future steps
         description: "The current time after completion"

@@ -4,6 +4,10 @@ const req = require("require-yml")
 const { SSM } = require("@aws-sdk/client-ssm")
 const { STSClient, GetCallerIdentityCommand } = require("@aws-sdk/client-sts")
 
+const DEFAULT_BATCH_COUNT = 20 // set the number of requests after which to pause
+const DEFAULT_PAUSE_TIME_MS = 1500 // set the duration of the pause in milliseconds
+const DEFAULT_MAX_SAVE_ATTEMPTS = 5 // set the maximum number of attempts to save a parameter
+
 class YamlToAws {
     awsAccount = ""
     secretKeyId = ""
@@ -11,6 +15,9 @@ class YamlToAws {
     region = ""
     ssm = null
     stsclient = null
+    batchCount = DEFAULT_BATCH_COUNT
+    pauseTimeMs = DEFAULT_PAUSE_TIME_MS
+    maxSaveAttempts = DEFAULT_MAX_SAVE_ATTEMPTS
 
     // base logger that just logs to console
     logger = {
@@ -93,6 +100,17 @@ class YamlToAws {
      * @param {*} prefix The prefix to use for the ssm parameters
      */
     async loadYamlToSSM(path, prefix, options = {}) {
+        // set the pause params if set in options
+        if (options.batchCount) {
+            this.batchCount = options.batchCount
+        }
+        if (options.pauseTimeMs) {
+            this.pauseTimeMs = options.pauseTimeMs
+        }
+        if (options.maxSaveAttempts) {
+            this.maxSaveAttempts = options.maxSaveAttempts
+        }
+
         // check the account id vs the one attached to the credentials
         await this.checkAccountID(this.awsAccount)
 
@@ -109,9 +127,6 @@ class YamlToAws {
         // flatten the object
         const flatSettings = this.flattenObject(settings, true)
         this.logger.info(`Parameters to load ${Object.keys(flatSettings).length} `)
-
-        const PAUSE_COUNT = 20 // set the number of requests after which to pause
-        const PAUSE_TIME_MS = 1500 // set the duration of the pause in milliseconds
 
         // fetch the current parameters from ssm under the prefix
         const currentParameters = await this.getExistingSSMParameters(prefix)
@@ -148,17 +163,33 @@ class YamlToAws {
                 created++
             }
 
-            try {
-                await this.saveSSMParameter(key, value)
-                this.logger.info(`Saved parameter ${key}`)
-            } catch (err) {
-                this.logger.error(`Failed to save SSM parameter ${key}: ${err}`)
+            let saveAttempt = 1
+            let saved = false
+            while (saveAttempt <= this.maxSaveAttempts && !saved) {
+                try {
+                    await this.saveSSMParameter(key, value)
+                    saved = true
+                    this.logger.info(`Saved parameter ${key}`)
+                } catch (err) {
+                    this.logger.error(`Failed to save SSM parameter ${key} on attempt ${saveAttempt}: ${err}`)
+                    if (err.code === "ThrottlingException") {
+                        // If throttling occurs, pause for an increaseing amount of time before retrying
+                        await new Promise((resolve) => setTimeout(resolve, this.pauseTimeMs * (saveAttempt + 1)))
+                    } else {
+                        break // If the error is not a throttling exception, stop retrying
+                    }
+                }
+                saveAttempt++
+            }
+
+            if (!saved) {
+                this.logger.error(`Could not save SSM parameter ${key} after ${this.maxSaveAttempts} attempts`)
             }
 
             currentParameters.delete(key) // Remove the key from currentParameters
             requestCount++
-            if (requestCount % PAUSE_COUNT === 0) {
-                await new Promise((resolve) => setTimeout(resolve, PAUSE_TIME_MS))
+            if (requestCount % this.batchCount === 0) {
+                await new Promise((resolve) => setTimeout(resolve, this.pauseTimeMs))
             }
         }
 

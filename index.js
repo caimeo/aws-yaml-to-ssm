@@ -14,13 +14,24 @@ async function run() {
         const secretAccessKey = core.getInput("aws_secret_access_key")
         const region = core.getInput("aws_region")
         const clean = core.getInput("clean") || false
+        const batchCount = core.getInput("batch_count") || 20
+        const pauseTimeMs = core.getInput("pause_time") || 1500
+        const maxSaveAttempts = core.getInput("max_save_attempts") || 5
 
         const y2a = new yamlToAws(awsAccountId, secretKeyId, secretAccessKey, region)
 
         core.info(`YamlToAws: ${path} load to SSM with prefix ${prefix}!`)
 
         y2a.setLogger(core)
-        const result = await y2a.loadYamlToSSM(path, prefix, { clean: clean })
+
+        const options = {
+            clean: clean,
+            batchCount: batchCount,
+            pauseTimeMs: pauseTimeMs,
+            maxSaveAttempts: maxSaveAttempts,
+        }
+
+        const result = await y2a.loadYamlToSSM(path, prefix, options)
 
         core.setOutput("parameters", result.parameters)
         core.setOutput("existing", result.existing)

@@ -16,7 +16,10 @@
     "keywords": [
         "GitHub",
         "Actions",
-        "JavaScript"
+        "JavaScript",
+        "AWS",
+        "SSM",
+        "Parameter Store"
     ],
     "author": "",
     "license": "MIT",
