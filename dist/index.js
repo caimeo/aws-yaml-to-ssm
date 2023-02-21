@@ -55268,8 +55268,8 @@ class YamlToAws {
                 } catch (err) {
                     this.logger.error(`Failed to save SSM parameter ${key} on attempt ${saveAttempt}: ${err}`)
                     if (err.code === "ThrottlingException") {
-                        // If throttling occurs, pause for an increaseing amount of time before retrying
-                        await new Promise((resolve) => setTimeout(resolve, this.pauseTimeMs * (saveAttempt + 1)))
+                        // If throttling occurs, pause for an increasing amount of time before retrying
+                        await new Promise((resolve) => setTimeout(resolve, this.pauseTimeMs * Math.pow(2, saveAttempt)))
                     } else {
                         break // If the error is not a throttling exception, stop retrying
                     }
