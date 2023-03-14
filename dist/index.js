@@ -55432,24 +55432,43 @@ class YamlToAws {
             return 0
         }
 
-        try {
-            const params = { Names: deadParameters }
-            const response = await this.ssm.deleteParameters(params)
-            this.logger.info(`Deleted ${response.DeletedParameters.length} parameters`)
-            // list all the paramters that were deleted
-            for (const parameter of response.DeletedParameters) {
-                this.logger.info(`Deleted parameter ${parameter}`)
-            }
-            this.logger.info(`Failed to delete ${response.InvalidParameters.length} parameters`)
-            // list all the paramters that failed to delete
-            for (const parameter of response.InvalidParameters) {
-                this.logger.info(`Failed to delete parameter ${parameter}`)
-            }
-            return response.DeletedParameters.length
-        } catch (error) {
-            this.logger.error(`Failed to delete dead parameters: ${error}`)
-            throw new Error(`Failed to delete dead parameters: ${error}`)
+        const batchSize = 10
+        const batches = []
+
+        // Split the deadParameters array into batches of 10
+        for (let i = 0; i < deadParameters.length; i += batchSize) {
+            const batch = deadParameters.slice(i, i + batchSize)
+            batches.push(batch)
         }
+
+        let totalDeleted = 0
+
+        for (const batch of batches) {
+            try {
+                const params = { Names: batch }
+                const response = await this.ssm.deleteParameters(params)
+                totalDeleted += response.DeletedParameters.length
+
+                // list all the parameters that were deleted
+                for (const parameter of response.DeletedParameters) {
+                    this.logger.info(`Deleted parameter ${parameter}`)
+                }
+
+                this.logger.info(`Failed to delete ${response.InvalidParameters.length} parameters`)
+
+                // list all the parameters that failed to delete
+                for (const parameter of response.InvalidParameters) {
+                    this.logger.info(`Failed to delete parameter ${parameter}`)
+                }
+            } catch (error) {
+                this.logger.error(`Failed to delete dead parameters: ${error}`)
+                throw new Error(`Failed to delete dead parameters: ${error}`)
+            }
+            await new Promise((resolve) => setTimeout(resolve, this.pauseTimeMs))
+        }
+
+        this.logger.info(`Deleted ${totalDeleted} parameters`)
+        return totalDeleted
     }
 }
 
